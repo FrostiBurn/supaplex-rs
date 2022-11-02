@@ -1,0 +1,16 @@
+[package]
+name = "supaplex"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+macroquad = "0.3.24"
+rand = "0.8.5"
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = true
+codegen-units = 1
