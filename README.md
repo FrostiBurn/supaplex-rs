@@ -1,6 +1,6 @@
 # Supaplex-rs
 
-a rewrite of the original game [Supaplex]([Supaplex - Wikipedia](https://en.wikipedia.org/wiki/Supaplex)), in [Rust](https://www.rust-lang.org/) using [macroquad]([GitHub - not-fl3/macroquad: Cross-platform game engine in Rust.](https://github.com/not-fl3/macroquad)).
+a rewrite of the original game [Supaplex](https://en.wikipedia.org/wiki/Supaplex), in [Rust](https://www.rust-lang.org/) using [macroquad](https://github.com/not-fl3/macroquad).
 
 
 
