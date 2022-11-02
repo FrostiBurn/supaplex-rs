@@ -1,6 +1,6 @@
 # Supaplex-rs
 
-a rewrite of the original game [Supaplex](https://en.wikipedia.org/wiki/Supaplex), in [Rust](https://www.rust-lang.org/) using [macroquad](https://github.com/not-fl3/macroquad).
+A rewrite of the original game [Supaplex](https://en.wikipedia.org/wiki/Supaplex), in [Rust](https://www.rust-lang.org/) using [macroquad](https://github.com/not-fl3/macroquad).
 
 
 
