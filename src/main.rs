@@ -1,15 +1,17 @@
 #[macro_use]
 
 mod tiles;
-mod world;
-mod gravity;
 mod bug_state;
 mod entity;
+mod gravity;
 mod macros;
 mod murphy;
+mod world;
 
-use macroquad::{prelude::*};
+use macroquad::prelude::*;
 use world::World;
+
+const UPDATE_TIME: f32 = 0.5;
 
 struct Game {
     camera: Camera2D,
@@ -21,17 +23,16 @@ struct Game {
 
 impl Game {
     async fn new() -> Self {
-        let world = World::new_from(
-            vec![
-                vec![5, 5, 5, 5, 5, 5],
-                vec![5, 7, 6, 3, 13, 5],
-                vec![5, 3, 3, 3, 3, 5],
-                vec![5, 13, 3, 3, 3, 5],
-                vec![5, 4, 0, 6, 0, 5],
-                vec![5, 5, 5, 5, 5, 5]
-                ]);
+        let world = World::new_from(vec![
+            vec![5, 5, 5, 5, 5, 5],
+            vec![5, 7, 6, 3, 13, 5],
+            vec![5, 3, 3, 3, 3, 5],
+            vec![5, 13, 3, 3, 3, 5],
+            vec![5, 4, 0, 6, 0, 5],
+            vec![5, 5, 5, 5, 5, 5],
+        ]);
 
-        let tiles = load_texture("assets/tiles.png").await.unwrap();
+        let tiles = load_texture("assets/moving3.png").await.unwrap();
         tiles.set_filter(FilterMode::Nearest);
 
         //build_textures_atlas();
@@ -90,13 +91,11 @@ fn update(game: &mut Game) {
     }
 
     game.level.update();
-
 }
 
 fn render(game: &Game) {
     game.level.draw(game.tiles);
 }
-
 
 fn render_ui(game: &Game) {
     draw_text(&*format!("Fps: {}", get_fps()), 30.0, 30.0, 30.0, WHITE);

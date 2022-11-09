@@ -1,12 +1,11 @@
 use crate::{
+    entity::Entity,
     get_entity,
-    tiles::{Moveable, Tile}, entity::Entity,
+    tiles::{Moveable, Tile},
 };
 
 #[derive(Clone, Copy)]
-pub struct Gravity {
-    pub slideable: bool,
-}
+pub struct Gravity;
 
 impl Gravity {
     pub fn update(
@@ -14,7 +13,7 @@ impl Gravity {
         x: usize,
         y: usize,
         grid: &Vec<Vec<Entity>>,
-        updates: &mut Vec<(usize, usize, Entity)>
+        updates: &mut Vec<(usize, usize, Entity)>,
     ) {
         let entity = get_entity!(grid, x, y);
         let foundation_entity = get_entity!(grid, x, y + 1);

@@ -1,3 +1,5 @@
+use macroquad::{texture::{Texture2D, draw_texture_ex, DrawTextureParams}, prelude::{WHITE, Vec2, Rect}};
+
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Moveable {
@@ -74,43 +76,23 @@ pub enum Tile {
 }
 
 impl Tile {
-    pub fn draw(&self) {
+    pub fn draw(&self, texture: Texture2D, x: f32, y: f32) {
         match self {
-            Tile::Base => todo!(),
-            Tile::Bug => todo!(),
-            Tile::Electron => todo!(),
-            Tile::Empty => todo!(),
-            Tile::Exit => todo!(),
-            Tile::Hardware(_) => todo!(),
-            Tile::Infotron => todo!(),
-            Tile::Murphy => todo!(),
-            Tile::None => todo!(),
-            Tile::Ports(_) => todo!(),
-            Tile::RAMChips(_) => todo!(),
-            Tile::SnikSnak => todo!(),
-            Tile::Terminal => todo!(),
-            Tile::UtilityDisks(_) => todo!(),
-            Tile::Zonk => todo!(),
-        }
-    }
-
-    pub fn as_u8(&self) -> u8 {
-        match self {
-            Tile::Base => 0,
-            Tile::Bug => 1,
-            Tile::Electron => 2,
-            Tile::Empty => 3,
-            Tile::Exit => 4,
-            Tile::Hardware(_) => 5,
-            Tile::Infotron => 6,
-            Tile::Murphy => 7,
-            Tile::Ports(_) => 9,
-            Tile::RAMChips(_) => 9,
-            Tile::SnikSnak => 10,
-            Tile::Terminal => 11,
-            Tile::UtilityDisks(_) => 12,
-            Tile::Zonk => 13,
-            Tile::None => 14,
+            Tile::Base =>           simple_draw(texture, x, y, 0.0, 0.0),
+            Tile::Bug =>            simple_draw(texture, x, y, 10.0, 0.0),
+            Tile::Electron =>       simple_draw(texture, x, y, 0.0, 1.0),
+            Tile::Empty =>          {},
+            Tile::Exit =>           simple_draw(texture, x, y, 0.0, 2.0),
+            Tile::Hardware(_) =>    simple_draw(texture, x, y, 0.0, 3.0),
+            Tile::Infotron =>       simple_draw(texture, x, y, 0.0, 4.0),
+            Tile::Murphy =>         {},
+            Tile::None =>           {},
+            Tile::Ports(_) =>       simple_draw(texture, x, y, 0.0, 10.0),
+            Tile::RAMChips(_) =>    simple_draw(texture, x, y, 0.0, 11.0),
+            Tile::SnikSnak =>       simple_draw(texture, x, y, 0.0, 12.0),
+            Tile::Terminal =>       simple_draw(texture, x, y, 0.0, 13.0),
+            Tile::UtilityDisks(_) =>simple_draw(texture, x, y, 0.0, 14.0),
+            Tile::Zonk =>           simple_draw(texture, x, y, 0.0, 15.0),
         }
     }
 
@@ -132,4 +114,26 @@ impl Tile {
             _ => Tile::Base,
         }
     }
+}
+
+fn simple_draw(texture: Texture2D, x: f32, y: f32, x_pos: f32, y_pos: f32) {
+    draw_texture_ex(
+        texture,
+        x,
+        y,
+        WHITE,
+        DrawTextureParams {
+            dest_size: Some(Vec2 { x: 1.0, y: 1.0 }),
+            source: Some(Rect {
+                x: x_pos * 16.0,
+                y: y_pos * 16.0,
+                w: 16.0,
+                h: 16.0,
+            }),
+            rotation: 0.0,
+            flip_x: false,
+            flip_y: false,
+            pivot: None,
+        },
+    );
 }

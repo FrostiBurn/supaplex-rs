@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 macroquad = "0.3.24"
-rand = "0.8.5"
 
 [profile.release]
 opt-level = 3
