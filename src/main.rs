@@ -84,7 +84,13 @@ fn update(game: &mut Game) {
     }
 
     if mouse_wheel().1 != 0.0 {
-        game.scroll_zoom += mouse_wheel().1;
+    	let zoom_value = if mouse_wheel().1 > 0.0 {
+    	    1.0
+    	} {
+    	    -1.0
+    	};
+    	
+        game.scroll_zoom += zoom_value;
         game.camera.zoom.x =
             0.5 * (-game.scroll_zoom + (4.0 + (game.scroll_zoom * game.scroll_zoom)).sqrt());
         game.camera.zoom.y = -game.camera.zoom.x * (screen_width() / screen_height())
