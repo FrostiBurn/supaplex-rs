@@ -86,7 +86,7 @@ fn update(game: &mut Game) {
     if mouse_wheel().1 != 0.0 {
     	let zoom_value = if mouse_wheel().1 > 0.0 {
     	    1.0
-    	} {
+    	} else {
     	    -1.0
     	};
     	
