@@ -125,8 +125,8 @@ fn simple_draw(texture: Texture2D, x: f32, y: f32, x_pos: f32, y_pos: f32) {
         DrawTextureParams {
             dest_size: Some(Vec2 { x: 1.0, y: 1.0 }),
             source: Some(Rect {
-                x: x_pos * 16.0,
-                y: y_pos * 16.0,
+                x: x_pos * 17.0,
+                y: y_pos * 17.0,
                 w: 16.0,
                 h: 16.0,
             }),

@@ -1,4 +1,4 @@
-use macroquad::prelude::*;
+use macroquad::prelude::{*, animation::AnimatedSprite};
 
 use crate::{
     entity::Entity,
@@ -9,20 +9,24 @@ use crate::{
 
 #[derive(Clone, Copy)]
 pub struct Murphy {
-    pub x: usize,
-    pub y: usize,
-    axis: Axis,
-    moving: Moveable,
+    pub position: (usize, usize),
+    pub prev_position: (usize, usize),
+    eating_tile: Tile,
+    preffered_axis: Axis,
+    animation_direction: AnimationDirection,
+    //moving: Moveable,
     time_since_last_update: f32,
 }
 
 impl Murphy {
     pub fn new(x: usize, y: usize) -> Self {
         Self {
-            x,
-            y,
-            axis: Axis::Horizontal,
-            moving: Moveable::Stationary,
+            position: (x, y),
+            prev_position: (x, y),
+            eating_tile: Tile::Empty,
+            preffered_axis: Axis::Horizontal,
+            animation_direction: AnimationDirection::Right,
+            //moving: Moveable::Stationary,
             time_since_last_update: 0.0,
         }
     }
@@ -33,46 +37,91 @@ impl Murphy {
         let y_axis = is_key_down(KeyCode::Down) as i8 - is_key_down(KeyCode::Up) as i8;
 
         if is_key_pressed(KeyCode::Down) || is_key_pressed(KeyCode::Up) {
-            self.axis = Axis::Vertical;
+            self.preffered_axis = Axis::Vertical;
         }
         if is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Left) {
-            self.axis = Axis::Horizontal;
+            self.preffered_axis = Axis::Horizontal;
         }
 
-        if (x_axis != 0 || y_axis != 0) && self.time_since_last_update <= 0.0 {
-            self.time_since_last_update = UPDATE_TIME;
+        if self.time_since_last_update <= 0.0 {
+            self.prev_position = self.position;
+            if x_axis != 0 || y_axis != 0 {
+                self.time_since_last_update = UPDATE_TIME;
 
-            let entity = get_entity!(grid, self.x, self.y);
+                println!("x, y: {}, {}", x_axis, y_axis);
 
-            match (x_axis, y_axis) {
-                (1, 0) | (-1, 0) => {
-                    // horizontal
-                    updates.push((self.x, self.y, Entity::from_tile(Tile::Empty)));
-                    self.x = (self.x as i8 + x_axis) as usize;
-                    self.moving = if x_axis == 1 {
-                        Moveable::Right
-                    } else {
-                        Moveable::Left
-                    };
-                    updates.push((self.x, self.y, Entity::from(entity, self.moving)));
+                if matches!(self.preffered_axis, Axis::Horizontal) {
+                    if x_axis != 0
+                        && get_entity!(
+                            grid,
+                            (self.position.0 as i8 + x_axis) as usize,
+                            self.position.1
+                        )
+                        .is_eatable
+                    {
+                        self.animation_direction = if x_axis == 1 {
+                            AnimationDirection::Right
+                        } else {
+                            AnimationDirection::Left
+                        };
+                        self.position =
+                            ((self.position.0 as i8 + x_axis) as usize, self.position.1);
+                        self.eating_tile = get_entity!(grid, self.position.0, self.position.1).tile;
+                    } else if y_axis != 0
+                        && get_entity!(
+                            grid,
+                            self.position.0,
+                            (self.position.1 as i8 + y_axis) as usize
+                        )
+                        .is_eatable
+                    {
+                        self.position =
+                            (self.position.0, (self.position.1 as i8 + y_axis) as usize);
+                        self.eating_tile = get_entity!(grid, self.position.0, self.position.1).tile;
+                    }
+                } else {
+                    if y_axis != 0
+                        && get_entity!(
+                            grid,
+                            self.position.0,
+                            (self.position.1 as i8 + y_axis) as usize
+                        )
+                        .is_eatable
+                    {
+                        self.position =
+                            (self.position.0, (self.position.1 as i8 + y_axis) as usize);
+                        self.eating_tile = get_entity!(grid, self.position.0, self.position.1).tile;
+                    } else if x_axis != 0
+                        && get_entity!(
+                            grid,
+                            (self.position.0 as i8 + x_axis) as usize,
+                            self.position.1
+                        )
+                        .is_eatable
+                    {
+                        self.animation_direction = if x_axis == 1 {
+                            AnimationDirection::Right
+                        } else {
+                            AnimationDirection::Left
+                        };
+                        self.position =
+                            ((self.position.0 as i8 + x_axis) as usize, self.position.1);
+                        self.eating_tile = get_entity!(grid, self.position.0, self.position.1).tile;
+                    }
                 }
-                (0, 1) | (0, -1) => {
-                    // vertical
-                    updates.push((self.x, self.y, Entity::from_tile(Tile::Empty)));
-                    self.y = (self.y as i8 + y_axis) as usize;
-                    self.moving = if y_axis == 1 {
-                        Moveable::Down
-                    } else {
-                        Moveable::Up
-                    };
-                    updates.push((self.x, self.y, Entity::from(entity, self.moving)));
-                }
-                _ => {
-                    // both
+                if self.position != self.prev_position {
+                    updates.push((
+                        self.position.0,
+                        self.position.1,
+                        Entity::from_tile(Tile::Murphy),
+                    ));
+                    updates.push((
+                        self.prev_position.0,
+                        self.prev_position.1,
+                        Entity::from_tile(Tile::Empty),
+                    ));
                 }
             }
-            if x_axis != 0 && y_axis == 0 {}
-            if x_axis == 0 && y_axis != 0 {}
         } else {
             self.time_since_last_update -= get_frame_time();
             // todo: fix small stutter
@@ -80,20 +129,36 @@ impl Murphy {
             if self.time_since_last_update < 0.0 {
                 self.time_since_last_update = 0.0;
             }
-            // todo: get rid of unneccesary calls
-            updates.push((self.x, self.y, Entity::from(Entity::from_tile(Tile::Murphy), Moveable::Stationary)));
         }
     }
 
     pub fn draw(&self, texture: Texture2D) {
         // todo: draw the tile being eaten
         // todo: add correct animation
-        match self.moving {
-            Moveable::Stationary => simple_draw(texture, self.x as f32, self.y as f32, 0.0, 7.0, false),
-            Moveable::Up => simple_draw(texture, self.x as f32, self.y as f32 + (self.time_since_last_update / UPDATE_TIME), 8.0, 7.0, false), // check last horizontal movement
-            Moveable::Down => simple_draw(texture, self.x as f32, self.y as f32 - (self.time_since_last_update / UPDATE_TIME), 8.0, 7.0, true),
-            Moveable::Left => simple_draw(texture, self.x as f32 + (self.time_since_last_update / UPDATE_TIME), self.y as f32, 8.0, 7.0, true),
-            Moveable::Right => simple_draw(texture, self.x as f32 - (self.time_since_last_update / UPDATE_TIME), self.y as f32, 8.0, 7.0, false),
+
+        if self.position == self.prev_position {
+            simple_draw(
+                texture,
+                self.position.0 as f32,
+                self.position.1 as f32,
+                0.0,
+                7.0,
+                false,
+            );
+        } else {
+            let delta = self.time_since_last_update / UPDATE_TIME;
+            let new_x = self.position.0 as f32
+                - ((self.position.0 as f32 - self.prev_position.0 as f32) * delta);
+            let new_y = self.position.1 as f32
+                - ((self.position.1 as f32 - self.prev_position.1 as f32) * delta);
+
+            self.eating_tile
+                .draw(texture, self.position.0 as f32, self.position.1 as f32);
+
+            match self.animation_direction {
+                AnimationDirection::Left => simple_draw(texture, new_x, new_y, 8.0, 7.0, true),
+                AnimationDirection::Right => simple_draw(texture, new_x, new_y, 8.0, 7.0, false),
+            }
         }
     }
 }
@@ -102,6 +167,12 @@ impl Murphy {
 enum Axis {
     Horizontal,
     Vertical,
+}
+
+#[derive(Clone, Copy)]
+enum AnimationDirection {
+    Left,
+    Right,
 }
 
 fn simple_draw(texture: Texture2D, x: f32, y: f32, x_pos: f32, y_pos: f32, flip_x: bool) {
@@ -113,8 +184,8 @@ fn simple_draw(texture: Texture2D, x: f32, y: f32, x_pos: f32, y_pos: f32, flip_
         DrawTextureParams {
             dest_size: Some(Vec2 { x: 1.0, y: 1.0 }),
             source: Some(Rect {
-                x: x_pos * 16.0,
-                y: y_pos * 16.0,
+                x: x_pos * 17.0,
+                y: y_pos * 17.0,
                 w: 16.0,
                 h: 16.0,
             }),

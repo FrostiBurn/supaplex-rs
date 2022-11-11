@@ -11,7 +11,7 @@ mod world;
 use macroquad::prelude::*;
 use world::World;
 
-const UPDATE_TIME: f32 = 0.5;
+const UPDATE_TIME: f32 = 0.20;
 
 struct Game {
     camera: Camera2D,
@@ -32,7 +32,7 @@ impl Game {
             vec![5, 5, 5, 5, 5, 5],
         ]);
 
-        let tiles = load_texture("assets/moving3.png").await.unwrap();
+        let tiles = load_texture("assets/moving2.png").await.unwrap();
         tiles.set_filter(FilterMode::Nearest);
 
         //build_textures_atlas();
@@ -113,27 +113,27 @@ fn render_ui(game: &Game) {
         WHITE,
     );
     draw_text(
-        &*format!("touches: {:?}", touches()),
+        &*format!("murphy pos: {:?}", game.level.murphy.position),
         30.0,
         90.0,
         30.0,
         WHITE,
     );
-    /*draw_text(
-        &*format!("cam zoom: {}", game.camera.zoom),
+    draw_text(
+        &*format!("murphy prev pos: {:?}", game.level.murphy.prev_position),
         30.0,
-        60.0,
+        120.0,
         30.0,
         WHITE,
     );
-    draw_text(
+    /*draw_text(
         &*format!("cam pos: {}", game.camera.target),
         30.0,
         90.0,
         30.0,
         WHITE,
-    );*/
-    /*draw_text(
+    );
+    draw_text(
         &*format!("update timer: {}", game.time_since_last_update),
         30.0,
         120.0,

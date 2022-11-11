@@ -14,7 +14,7 @@ use crate::{
 
 pub struct World {
     grid: Vec<Vec<Entity>>,
-    murphy: Murphy,
+    pub murphy: Murphy,
     updated_entities: Vec<(usize, usize, Entity)>,
     time_since_last_update: f32,
     direction: (bool, i8, i8),
@@ -34,9 +34,13 @@ impl World {
     // test code
     pub fn new_from(grid: Vec<Vec<u8>>) -> Self {
         let mut new_grid: Vec<Vec<Entity>> = Vec::new();
-        grid.iter().for_each(|col| {
+        let mut murphy_pos = (0, 0);
+        grid.iter().enumerate().for_each(|(x, col)| {
             let mut new_col: Vec<Entity> = Vec::new();
-            col.iter().for_each(|i| {
+            col.iter().enumerate().for_each(|(y, i)| {
+                if matches!(Tile::from_u8(*i), Tile::Murphy) {
+                    murphy_pos = (x, y);
+                } 
                 new_col.push(Entity::from_tile(Tile::from_u8(*i)));
             });
             new_grid.push(new_col);
@@ -47,7 +51,7 @@ impl World {
         Self {
             grid: new_grid,
             updated_entities: Vec::new(),
-            murphy: Murphy::new(0, 0),
+            murphy: Murphy::new(murphy_pos.0, murphy_pos.1),
             time_since_last_update: 0.0,
             direction: (true, 0, 0),
         }
