@@ -1,123 +1,126 @@
-use macroquad::{
-    prelude::{Rect, Vec2, WHITE},
-    texture::{draw_texture_ex, DrawTextureParams, Texture2D},
-    time::get_frame_time,
-};
+use macroquad::{prelude::*, texture::Texture2D, time::get_frame_time};
 
-use crate::set_entity;
-use crate::{
-    entity::Entity,
-    murphy::Murphy,
-    tiles::{Moveable, Tile},
-    UPDATE_TIME,
-};
+use crate::grid::Grid;
+use crate::level::components::move_component::MoveComponent;
+use crate::tile::Tile;
 
 pub struct World {
-    grid: Vec<Vec<Entity>>,
-    pub murphy: Murphy,
-    updated_entities: Vec<(usize, usize, Entity)>,
-    time_since_last_update: f32,
-    direction: (bool, i8, i8),
+    grid: Grid,
+    accumulator: f32,
+    preffered_axis: Axis,
+    pub ups: u8,
 }
 
 impl World {
     pub fn new() -> Self {
         Self {
-            grid: Vec::new(), //vec![vec![Entity, 8], 8],
-            updated_entities: Vec::new(),
-            murphy: Murphy::new(0, 0),
-            time_since_last_update: 0.0,
-            direction: (true, 0, 0),
+            grid: Grid::new((8, 8), Tile::Base), //vec![vec![Entity, 8], 8],
+            accumulator: 0.0,
+            preffered_axis: Axis::Horizontal,
+            ups: 64,
         }
     }
 
     // test code
-    pub fn new_from(grid: Vec<Vec<u8>>) -> Self {
-        let mut new_grid: Vec<Vec<Entity>> = Vec::new();
-        let mut murphy_pos = (0, 0);
-        grid.iter().enumerate().for_each(|(x, col)| {
-            let mut new_col: Vec<Entity> = Vec::new();
-            col.iter().enumerate().for_each(|(y, i)| {
-                if matches!(Tile::from_u8(*i), Tile::Murphy) {
-                    murphy_pos = (x, y);
-                } 
-                new_col.push(Entity::from_tile(Tile::from_u8(*i)));
-            });
-            new_grid.push(new_col);
+    pub fn new_from(cols: usize, grid: Vec<u8>) -> Self {
+        let mut new_grid: Vec<Tile> = vec![Tile::Base; grid.len()];
+        grid.iter().enumerate().for_each(|(i, value)| {
+            new_grid[i] = Tile::from_u8(*value);
         });
 
         //println!("{:#?}", new_grid);
 
         Self {
-            grid: new_grid,
-            updated_entities: Vec::new(),
-            murphy: Murphy::new(murphy_pos.0, murphy_pos.1),
-            time_since_last_update: 0.0,
-            direction: (true, 0, 0),
+            grid: Grid::new_from(cols, new_grid),
+            accumulator: 0.0,
+            preffered_axis: Axis::Horizontal,
+            ups: 64,
         }
     }
 
     pub fn update(&mut self) {
-        // update murphy before anything else
-        self.murphy.update(&self.grid, &mut self.updated_entities);
+        // input handling
 
-        self.time_since_last_update += get_frame_time();
-        if self.time_since_last_update >= UPDATE_TIME {
-            // do logic and push to updated_entities
-            self.grid.iter().enumerate().for_each(|(x, col)| {
-                col.iter().enumerate().for_each(|(y, entity)| {
-                    if let Some(gravity) = entity.gravity {
-                        gravity.update(x, y, &self.grid, &mut self.updated_entities);
-                    }
-                    if let Some(mut bug_state) = entity.bug_state {
-                        bug_state.update();
-                    }
-                });
-            });
+        if is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Right) {
+            self.preffered_axis = Axis::Horizontal
+        } else if is_key_pressed(KeyCode::Up) || is_key_pressed(KeyCode::Down) {
+            self.preffered_axis = Axis::Vertical
+        };
 
-            // reset x, y direction
-            self.direction = (self.direction.0, 0, 0);
-            self.time_since_last_update = 0.0;
+        let x_axis = is_key_down(KeyCode::Right) as i8 - is_key_down(KeyCode::Left) as i8;
+        let y_axis = is_key_down(KeyCode::Down) as i8 - is_key_down(KeyCode::Up) as i8;
+
+        let movement_vec = if matches!(self.preffered_axis, Axis::Horizontal) {
+            match (x_axis, y_axis) {
+                (1, 0) => vec![MoveComponent::Right],
+                (-1, 0) => vec![MoveComponent::Left],
+                (1, 1) => vec![MoveComponent::Right, MoveComponent::Down],
+                (-1, 1) => vec![MoveComponent::Left, MoveComponent::Down],
+                (-1, -1) => vec![MoveComponent::Left, MoveComponent::Up],
+                (1, -1) => vec![MoveComponent::Right, MoveComponent::Up],
+                _ => vec![],
+            }
+        } else {
+            match (x_axis, y_axis) {
+                (0, 1) => vec![MoveComponent::Down],
+                (0, -1) => vec![MoveComponent::Up],
+                (1, 1) => vec![MoveComponent::Down, MoveComponent::Right],
+                (-1, 1) => vec![MoveComponent::Down, MoveComponent::Left],
+                (-1, -1) => vec![MoveComponent::Up, MoveComponent::Left],
+                (1, -1) => vec![MoveComponent::Up, MoveComponent::Right],
+                _ => vec![],
+            }
+        };
+
+        /*let movement_tuple = if matches!(self.preffered_axis, Axis::Horizontal) {
+            if y_axis != 0 {
+                vec![MoveComponent::from_i8(x_axis), MoveComponent::from_i8(y_axis << 1)]
+            } else {
+                vec![MoveComponent::from_i8(x_axis)]
+            }
+        } else if x_axis != 0 {
+            vec![MoveComponent::from_i8(y_axis << 1), MoveComponent::from_i8(x_axis)]
+        } else {
+            vec![MoveComponent::from_i8(y_axis << 1)]
+        };*/
+
+        let special_key = is_key_down(KeyCode::Space);
+
+        // we want to update independent of the game loop so that
+        // game logic stays correct, even if that means sacrificing time accuracy,
+        // it doesn't matter if we skip a update as a result of it being just short of UPDATE_TIME,
+        // because we can just interpolate it with delta time anyway. Or else it will be to fast to see i guess.
+        let delta_time = get_frame_time();
+        //println!("delta time: {}", delta_time);
+
+        let fixed_delta_time = if (delta_time - (1.0 / 120.0)).abs() < 0.001 {
+            //succeeder += 1;
+            1.0 / 120.0
+        } else if (delta_time - (1.0 / 60.0)).abs() < 0.001 {
+            //succeeder += 1;
+            1.0 / 60.0
+        } else if (delta_time - (1.0 / 30.0)).abs() < 0.001 {
+            //succeeder += 1;
+            1.0 / 30.0
+        } else {
+            //failer += 1;
+            delta_time
+        };
+
+        self.accumulator += fixed_delta_time;
+        while self.accumulator >= 1.0 / self.ups as f32 {
+            self.grid.update(&movement_vec, special_key);
+            self.accumulator -= 1.0 / self.ups as f32;
         }
-
-        // push all grid updates at once
-        self.updated_entities.iter().for_each(|(x, y, entity)| {
-            set_entity!(self.grid, *x, *y, *entity);
-        });
-        self.updated_entities.clear();
     }
 
     pub fn draw(&self, texture: Texture2D) {
-        self.murphy.draw(texture);
-
-        self.grid.iter().enumerate().for_each(|(x, col)| {
-            col.iter().enumerate().for_each(|(y, entity)| {
-                if !matches!(entity.tile, Tile::Empty) && !matches!(entity.tile, Tile::Murphy) {
-                    match entity.moveable {
-                        Moveable::Stationary => entity.tile.draw(texture, x as f32, y as f32),
-                        Moveable::Up => entity.tile.draw(
-                            texture,
-                            x as f32,
-                            y as f32 + 1.0 - self.time_since_last_update * UPDATE_TIME,
-                        ),
-                        Moveable::Down => entity.tile.draw(
-                            texture,
-                            x as f32,
-                            y as f32 - 1.0 + self.time_since_last_update * 2.0,
-                        ),
-                        Moveable::Left => entity.tile.draw(
-                            texture,
-                            x as f32 + 1.0 - self.time_since_last_update * 2.0,
-                            y as f32,
-                        ),
-                        Moveable::Right => entity.tile.draw(
-                            texture,
-                            x as f32 - 1.0 + self.time_since_last_update * 2.0,
-                            y as f32,
-                        ),
-                    }
-                }
-            });
-        });
+        self.grid.draw(texture);
     }
+}
+
+#[derive(Clone, Copy)]
+enum Axis {
+    Horizontal,
+    Vertical,
 }
