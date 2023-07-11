@@ -1,31 +1,32 @@
-#[macro_use]
-
-mod world;
 mod grid;
+mod tile_data;
 mod level;
-mod stupid;
-mod tile;
+mod pixel_camera;
+mod level_loader;
 
-use level::components::move_component::MoveComponent;
-use macroquad::prelude::*;
-use stupid::LEVEL_EASY_DEAL;
-use world::World;
+use level::Level;
+use level_loader::load_level_dat;
+use macroquad::{prelude::*, miniquad::gl::GL_MULTISAMPLE};
+use pixel_camera::PixelCamera;
+
 
 struct Game {
-    camera: Camera2D,
-    zoom_value_index: usize,
-    zoom_values: [f32; 8],
-    camera_speed: f32,
-    world: World,
+    camera: PixelCamera,
+    freecam: Option<Vec2>,
+    current_level: Level,
+    level_set: Vec<Level>,
+    selected_level: usize,
     tiles: Texture2D,
     text_params: TextParams,
+    debug_info: bool,
+    fullscreen: bool,
 }
 
 impl Game {
     async fn new() -> Self {
-        let world = World::new_from(60, LEVEL_EASY_DEAL.to_vec());
+        //let level = Level::new(8.0, 60, 24, LEVEL_EASY_DEAL.to_vec());
 
-        //let world = World::new_from(vec![vec![13; 26]; 62]);
+        let levels = load_level_dat("LEVELS.DAT").unwrap();
 
         let tiles = load_texture("assets/moving2.png").await.unwrap();
         tiles.set_filter(FilterMode::Nearest);
@@ -38,23 +39,27 @@ impl Game {
             ..Default::default()
         };
 
+        let camera = PixelCamera::new(Vec2::ZERO, 1.0, 256.0);
+
         Self {
-            camera: Camera2D {
-                zoom: vec2(1., screen_width() / screen_height()),
-                ..Default::default()
-            },
-            zoom_value_index: 4,
-            zoom_values: [2.0, 1.0, 0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625],
-            camera_speed: 1.0,
-            world,
+            camera,
+            freecam: None,
+            current_level: levels[0].clone(),
+            level_set: levels,
+            selected_level: 0,
             tiles,
             text_params,
+            debug_info: false,
+            fullscreen: false
         }
     }
 }
 
 #[macroquad::main("Supaplex")]
 async fn main() {
+    unsafe {
+        miniquad::gl::glDisable(GL_MULTISAMPLE);
+    }
     let mut game = Game::new().await;
 
     loop {
@@ -62,117 +67,108 @@ async fn main() {
 
         clear_background(BLACK);
 
-        set_camera(&game.camera);
-        render(&game);
-
+        render(&mut game);
         set_default_camera();
-        render_ui(&game);
+
+        game.current_level.draw_info(game.text_params);
+        if game.debug_info {
+            render_ui(&game);
+        }
 
         next_frame().await
     }
 }
 
 fn update(game: &mut Game) {
-    if is_key_pressed(KeyCode::W) {
-        game.camera.target.y -= game.camera_speed; // * get_frame_time() * 69.0;
+    if let Some(pos) = &mut game.freecam {
+        game.camera.move_camera_with_keys(KeyCode::W, KeyCode::S, KeyCode::A, KeyCode::D);
+        *pos = game.camera.position;
     }
-    if is_key_pressed(KeyCode::A) {
-        game.camera.target.x -= game.camera_speed; // * get_frame_time() * 69.0;
-    }
-    if is_key_pressed(KeyCode::S) {
-        game.camera.target.y += game.camera_speed; // * get_frame_time() * 69.0;
-    }
-    if is_key_pressed(KeyCode::D) {
-        game.camera.target.x += game.camera_speed; // * get_frame_time() * 69.0;
+    game.camera.handle_zoom();
+
+    let mut speed =
+        (is_key_pressed(KeyCode::Equal) as i8 - is_key_pressed(KeyCode::Minus) as i8) as f32;
+    if is_key_down(KeyCode::LeftShift) {
+        speed *= 0.1;
     }
 
-    game.world.ups +=
-        4 * (is_key_pressed(KeyCode::Equal) as u8 - is_key_pressed(KeyCode::Minus) as u8);
+    game.current_level.data.speed += speed;
 
     if is_key_pressed(KeyCode::R) {
-        game.world = World::new_from(60, LEVEL_EASY_DEAL.to_vec());
+        game.current_level = game.level_set[game.selected_level].clone();
     }
-
-    if is_key_pressed(KeyCode::F) {}
-
-    if mouse_wheel().1 != 0.0 {
-        // fix windows having decimal zoom capabilities
-        if mouse_wheel().1 > 0.0 {
-            if game.zoom_value_index < 7 {
-                game.zoom_value_index += 1;
-            }
-        } else if game.zoom_value_index != 0 {
-            game.zoom_value_index -= 1;
+    if is_key_pressed(KeyCode::P) {
+        if game.freecam.is_none() {
+            game.freecam = Some(game.camera.position);
+        } else {
+            game.freecam = None;
         }
-
-        game.camera.zoom.x = game.zoom_values[game.zoom_value_index];
-        game.camera.zoom.y = -game.camera.zoom.x * (screen_width() / screen_height());
-        /*game.camera.zoom.x =
-            0.5 * (-game.scroll_zoom + (4.0 + (game.scroll_zoom * game.scroll_zoom)).sqrt());
-        game.camera.zoom.y = -game.camera.zoom.x * (screen_width() / screen_height())*/
     }
 
-    game.world.update();
+    if is_key_pressed(KeyCode::Comma) {
+        game.selected_level -= 1;
+        game.current_level = game.level_set[game.selected_level].clone();
+    }
+    if is_key_pressed(KeyCode::Period) {
+        if game.selected_level < game.level_set.len() {
+            game.selected_level += 1;
+        } else {
+            game.selected_level = 0;
+        }
+        game.current_level = game.level_set[game.selected_level].clone();
+    }
+
+    if is_key_pressed(KeyCode::T) {
+        game.debug_info = !game.debug_info;
+    }
+
+    if is_key_pressed(KeyCode::F11) {
+        game.fullscreen = !game.fullscreen;
+        macroquad::window::set_fullscreen(game.fullscreen);
+    }
+
+    game.current_level.update();
 }
 
-fn render(game: &Game) {
-    game.world.draw(game.tiles);
+fn render(game: &mut Game) {
+    if game.freecam.is_none() {
+        if let Some(camera_target) = game.current_level.data.camera_target {
+            game.camera.position = camera_target;
+        }
+    }
+    //game.camera.begin_pp();
+    set_camera(&game.camera);
+    game.current_level.draw(game.tiles);
+    //game.camera.end_pp();
+    if game.debug_info {
+        game.current_level.draw_text();
+    }
 }
 
 fn render_ui(game: &Game) {
-    draw_text_ex(&format!("Fps: {}", get_fps()), 10.0, 20.0, game.text_params);
+    draw_text_ex(&format!("Fps: {}", get_fps()), 10.0, 60.0, game.text_params);
     draw_text_ex(
-        &format!("camera target: {:?}", game.camera.target),
-        10.0,
-        40.0,
-        game.text_params,
-    );
-    draw_text_ex(
-        &format!("camera zoom: {:?}", game.camera.zoom),
-        10.0,
-        60.0,
-        game.text_params,
-    );
-    draw_text_ex(
-        &format!("ups: {}", game.world.ups),
+        &format!("position: {:?}", game.camera.position),
         10.0,
         80.0,
         game.text_params,
     );
-    /*draw_text(
-        &*format!("update timer: {}", game.time_since_last_update),
-        30.0,
+    draw_text_ex(
+        &format!("zoom: {:?}", game.camera.zoom),
+        10.0,
+        100.0,
+        game.text_params,
+    );
+    draw_text_ex(
+        &format!("speed: {}", game.current_level.data.speed),
+        10.0,
         120.0,
-        30.0,
-        WHITE,
-    );*/
-}
-
-pub trait TupleExt {
-    fn trans(&self, trans: (i16, i16)) -> Self;
-}
-
-impl TupleExt for (usize, usize) {
-    fn trans(&self, trans: (i16, i16)) -> Self {
-        (
-            (self.0 as i16 + trans.0) as usize,
-            (self.1 as i16 + trans.1) as usize,
-        )
-    }
-}
-
-pub trait FTupleExt {
-    fn get_offset(&self, offset: u8, mc: &MoveComponent) -> (f32, f32);
-}
-
-impl FTupleExt for (f32, f32) {
-    fn get_offset(&self, offset: u8, mc: &MoveComponent) -> (f32, f32) {
-        match mc {
-            MoveComponent::Stationary => (self.0, self.1),
-            MoveComponent::Up => (self.0, self.1 + offset as f32 / 16.0),
-            MoveComponent::Down => (self.0, self.1 - offset as f32 / 16.0),
-            MoveComponent::Left => (self.0 + offset as f32 / 16.0, self.1),
-            MoveComponent::Right => (self.0 - offset as f32 / 16.0, self.1),
-        }
-    }
+        game.text_params,
+    );
+    draw_text_ex(
+        &format!("update duration: {} ns", game.current_level.data.update_duration.as_nanos()),
+        10.0,
+        140.0,
+        game.text_params,
+    );
 }

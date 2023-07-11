@@ -1,169 +1,146 @@
-use std::slice::Iter;
-
-use macroquad::texture::Texture2D;
-
-use crate::{
-    level::components::{
-        move_component::MoveComponent, transitory_component::TransitoryComponent,
-        update_component::UpdateComponent,
-    },
-    tile::Tile,
+use crate::tile_data::{
+    tile::Tile, tile_interaction::TileInteraction, tile_move::TileMove,
+    tile_state::TileState, tile_type::TileType,
 };
 
+const BORDER_TILE: Tile = Tile {
+    upd: 0.0,
+    typ: TileType::None,
+    state: TileState::Indestructible,
+    int: TileInteraction::None,
+    mov: TileMove::None,
+    mov2: TileMove::Left,
+};
+
+#[derive(Clone)]
 pub struct Grid {
-    cols: usize,
-    cells: Cells,
-    //updated_cells: UpdatingCells,
+    pub width: i16,
+    pub height: i16,
+    pub array: Vec<Tile>,
 }
 
 impl Grid {
-    pub fn new(size: (usize, usize), value: Tile) -> Self {
-        let cols = size.0;
-        let cells = vec![value; size.0 * size.1];
+    pub fn new(width: i16, height: i16, array: Vec<u8>) -> Self {
+        let array: Vec<Tile> = array
+            .into_iter()
+            .map(|i| TileType::to_tile(TileType::from_u8(i)))
+            .collect();
+
         Self {
-            cols,
-            //updated_cells: UpdatingCells::new(cols, cells.len()),
-            cells: Cells::new(cols, cells),
+            width,
+            height,
+            array,
         }
     }
 
-    pub fn new_from(cols: usize, grid: Vec<Tile>) -> Self {
-        Self {
-            cols,
-            //updated_cells: UpdatingCells::new(cols, grid.len()),
-            cells: Cells::new(cols, grid),
-        }
-    }
-    pub fn update(&mut self, move_component_vec: &[MoveComponent], special_key: bool) {
-        self.cells.iter_mut().for_each(|tile| tile.update_mut());
-
-        let (mut x, mut y) = (0usize, 0usize);
-        for _ in 0..self.cells.len() {
-            if let Some(updates) =
-                self.cells
-                    .get(x, y)
-                    .update((x, y), &self.cells, move_component_vec, special_key)
-            {
-                updates.into_iter().for_each(|update| {
-                    self.cells.set(update.0, update.1);
-                });
-            }
-
-            x += 1;
-            if x == self.cols {
-                y += 1;
-                x = 0;
-            }
+    pub fn get(&self, coord: &Coord) -> &Tile {
+        match self
+            .array
+            .get((coord.y * self.width + coord.x) as usize)
+        {
+            Some(tile) => tile,
+            None => &BORDER_TILE,
         }
     }
 
-    pub fn draw(&self, texture: Texture2D) {
-        let (mut x, mut y) = (0, 0);
-        self.cells.iter().for_each(|cell| {
-            cell.draw((x, y), texture);
-            x += 1;
-            if x == self.cols {
-                y += 1;
-                x = 0;
-            }
-        });
+    pub fn get_mut(&mut self, coord: &Coord) -> Option<&mut Tile> {
+        self.array
+            .get_mut((coord.y * self.width + coord.x) as usize)
+    }
+
+    pub fn get_mut_unchecked(&mut self, coord: &Coord) -> &mut Tile {
+        unsafe {
+            self.array
+                .get_unchecked_mut((coord.y * self.width + coord.x) as usize)
+        }
+    }
+
+    pub fn set(&mut self, coord: &Coord, tile: Tile) {
+        if let Some(current_tile) = self
+            .array
+            .get_mut((coord.y * self.width + coord.x) as usize)
+        {
+            *current_tile = tile;
+        }
     }
 }
 
-pub struct Cells {
-    cols: usize,
-    cells: Vec<Tile>,
+#[derive(Clone, Copy, Debug)]
+pub struct Coord {
+    pub x: i16,
+    pub y: i16,
 }
 
-impl Cells {
-    pub fn new(cols: usize, cells: Vec<Tile>) -> Self {
-        Self { cols, cells }
+impl Coord {
+    pub const fn new(x: i16, y: i16) -> Self {
+        Self { x, y }
     }
 
-    pub fn len(&self) -> usize {
-        self.cells.len()
-    }
+    pub fn offset(&self, rhs: &impl ToCoord) -> Self {
+        let offset = rhs.to_coord();
 
-    pub fn iter(&self) -> Iter<Tile> {
-        self.cells.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<Tile> {
-        self.cells.iter_mut()
-    }
-
-    pub fn get_mut(&mut self, i: usize) -> Option<&mut Tile> {
-        self.cells.get_mut(i)
-    }
-
-    pub fn get(&self, x: usize, y: usize) -> &Tile {
-        match self.cells.get(x + y * self.cols) {
-            Some(tile) => tile,
-            None => &Tile::None,
+        Self {
+            x: self.x + offset.x,
+            y: self.y + offset.y,
         }
     }
 
-    pub fn get_tuple(&self, src: (usize, usize)) -> &Tile {
-        match self.cells.get(src.0 + src.1 * self.cols) {
-            Some(tile) => tile,
-            None => &Tile::None,
+    pub fn to_fcoord(self, tile: &Tile) -> FCoord {
+        let upd = tile.upd.max(0.0);
+
+        match &tile.mov {
+            TileMove::Up => FCoord::new(self.x as f32, self.y as f32 + upd),
+            TileMove::Right => FCoord::new(self.x as f32 - upd, self.y as f32),
+            TileMove::Down => FCoord::new(self.x as f32, self.y as f32 - upd),
+            TileMove::Left => FCoord::new(self.x as f32 + upd, self.y as f32),
+            TileMove::None => FCoord::new(self.x as f32, self.y as f32),
         }
     }
 
-    pub fn get_trans(&self, src: (usize, usize), trans: (i16, i16)) -> &Tile {
-        let index =
-            (src.0 as i16 + trans.0) as usize + ((src.1 as i16 + trans.1) as usize * self.cols);
-        match self.cells.get(index) {
-            Some(tile) => {
-                //println!("[{}] eatable: {}, kind: {:?}", index, tile.is_eatable, tile.kind);
-                tile
-            }
-            None => &Tile::None,
+    pub fn as_fcoord(&self) -> FCoord {
+        FCoord::new(self.x as f32, self.y as f32)
+    }
+}
+
+pub trait ToCoord {
+    fn to_coord(&self) -> Coord;
+}
+
+#[derive(Clone, Copy)]
+pub struct FCoord {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl FCoord {
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+
+    pub fn offset_time(&self, tile: &Tile) -> FCoord {
+        let upd = tile.upd.max(0.0);
+
+        match &tile.mov {
+            TileMove::Up => FCoord::new(self.x, self.y + upd),
+            TileMove::Right => FCoord::new(self.x - upd, self.y),
+            TileMove::Down => FCoord::new(self.x, self.y - upd),
+            TileMove::Left => FCoord::new(self.x + upd, self.y),
+            TileMove::None => FCoord::new(self.x, self.y),
         }
     }
 
-    pub fn set(&mut self, dst: (usize, usize), value: Tile) -> bool {
-        match self.get_mut(dst.0 + dst.1 * self.cols) {
-            Some(tile) => *tile = value,
-            None => return false,
-        };
-        true
-    }
+    pub fn offset(&self, rhs: &impl ToCoord) -> Self {
+        let offset = rhs.to_coord();
 
-    pub fn set_trans(&mut self, src: (usize, usize), trans: (i16, i16), tile: Tile) -> bool {
-        self.set(
-            (
-                (src.0 as i16 + trans.0) as usize,
-                (src.1 as i16 + trans.1) as usize,
-            ),
-            tile,
-        )
-    }
-
-    pub fn mov(&mut self, grid: &Cells, src: (usize, usize), trans: (i16, i16)) {
-        let tile = grid.get(src.0, src.1);
-        if self.set(
-            (
-                (src.0 as i16 + trans.0) as usize,
-                (src.1 as i16 + trans.1) as usize,
-            ),
-            *tile,
-        ) {
-            self.set(src, Tile::Empty);
+        Self {
+            x: self.x + offset.x as f32,
+            y: self.y + offset.y as f32,
         }
     }
+}
 
-    pub fn mov_val(&mut self, src: (usize, usize), trans: (i16, i16), value: Tile) {
-        self.set(
-            (
-                (src.0 as i16 + trans.0) as usize,
-                (src.1 as i16 + trans.1) as usize,
-            ),
-            value,
-        );
-        self.set(
-            src,
-            Tile::Transitory(UpdateComponent(16, 0), TransitoryComponent::None),
-        );
+impl ToCoord for (i16, i16) {
+    fn to_coord(&self) -> Coord {
+        Coord { x: self.0, y: self.1 }
     }
 }
